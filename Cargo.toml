@@ -5,4 +5,5 @@ edition = "2021"
 description = "Simple CLI for basic processor information"
 
 [dependencies]
+crossterm = { version = "0.29.0", default-features = false, features = ["events"] }
 sysinfo = "0.33"
