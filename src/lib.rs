@@ -2,3 +2,4 @@
 
 pub mod lscpu;
 pub mod machine;
+pub mod gpu;

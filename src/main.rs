@@ -6,6 +6,7 @@ use crossterm::style::{Print, PrintStyledContent, ResetColor, Stylize};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use sysinfo::{CpuRefreshKind, RefreshKind, System};
 
+use hudcon::gpu;
 use hudcon::lscpu;
 use hudcon::machine;
 
@@ -41,7 +42,7 @@ fn write_section_rule() -> io::Result<()> {
 
 /// Menu rows. The dash rule above the menu uses the width of the longest line.
 /// Format: `(X)label` where `X` is the hotkey (styled in the menu).
-const MENU_LINES: &[&str] = &["(C)PU info", "(M)achine info"];
+const MENU_LINES: &[&str] = &["(C)PU info", "(M)achine info", "(G)raphics cards"];
 
 fn menu_width() -> usize {
     MENU_LINES
@@ -124,6 +125,41 @@ fn write_crlf() -> io::Result<()> {
     let mut out = io::stdout();
     write!(out, "\r\n")?;
     out.flush()
+}
+
+fn short_gpu_name(s: &str) -> String {
+    if s.len() > 48 {
+        format!("{}…", &s[..46])
+    } else {
+        s.to_string()
+    }
+}
+
+/// One-line recap: which GPU indices are driving OpenGL vs firmware primary display.
+fn write_gpu_session_summary(info: &gpu::GpuInfo) -> io::Result<()> {
+    let mut parts = Vec::new();
+    for g in &info.gpus {
+        let mut tags = Vec::new();
+        if g.opengl_active {
+            tags.push("OpenGL");
+        }
+        if g.primary_display {
+            tags.push("boot VGA");
+        }
+        if !tags.is_empty() {
+            parts.push(format!(
+                "GPU {} ({}): {}",
+                g.index,
+                short_gpu_name(&g.name),
+                tags.join(" + ")
+            ));
+        }
+    }
+    if parts.is_empty() {
+        return Ok(());
+    }
+    write_kv("In use (summary):", parts.join(" | "))?;
+    Ok(())
 }
 
 const KV_LABEL_WIDTH: usize = 18;
@@ -423,6 +459,62 @@ fn show_machine_info() -> io::Result<()> {
     Ok(())
 }
 
+fn show_gpu_info() -> io::Result<()> {
+    let info = gpu::gather_gpu_info();
+
+    write_section_title("Graphics Cards")?;
+    write_section_rule()?;
+
+    if let Some(ref r) = info.opengl_renderer {
+        if !r.is_empty() {
+            write_kv("OpenGL Renderer:", r)?;
+        }
+    }
+
+    write_gpu_session_summary(&info)?;
+
+    if info.gpus.is_empty() {
+        write_kv("GPUs:", "No GPU information available")?;
+        write_crlf()?;
+        return Ok(());
+    }
+
+    for card in &info.gpus {
+        write_section_title(&format!("GPU {}: {}", card.index, card.name))?;
+        write_section_rule()?;
+        write_kv("Active for:", card.active_for_display())?;
+        write_kv("Driver:", &card.driver)?;
+        if card.bus != "Unknown" && card.bus != "n/a" {
+            write_kv("Bus:", &card.bus)?;
+        }
+        if card.revision != "Unknown" && card.revision != "n/a" {
+            write_kv("Revision:", &card.revision)?;
+        }
+        if let Some(ref m) = card.memory_total {
+            write_kv("Memory Total:", m)?;
+        }
+        if let Some(ref m) = card.memory_used {
+            write_kv("Memory Used:", m)?;
+        }
+        if let Some(ref m) = card.memory_free {
+            write_kv("Memory Free:", m)?;
+        }
+        if let Some(u) = card.utilization {
+            if u > 0 {
+                write_kv("Utilization:", format!("{u}%"))?;
+            }
+        }
+        if let Some(t) = card.temperature {
+            if t > 0 {
+                write_kv("Temperature:", format!("{t}°C"))?;
+            }
+        }
+        write_crlf()?;
+    }
+
+    Ok(())
+}
+
 fn run_menu() -> io::Result<()> {
     enable_raw_mode()?;
     let _guard = RawModeGuard;
@@ -453,6 +545,10 @@ fn run_menu() -> io::Result<()> {
                 write_crlf()?;
                 show_machine_info()?;
             }
+            KeyCode::Char(c) if c.eq_ignore_ascii_case(&menu_hotkey_for(MENU_LINES[2])) => {
+                write_crlf()?;
+                show_gpu_info()?;
+            }
             KeyCode::Char(c) if c.eq_ignore_ascii_case(&'x') => {
                 write_crlf()?;
                 break;
@@ -461,7 +557,10 @@ fn run_menu() -> io::Result<()> {
                 write_crlf()?;
                 let c_key = menu_hotkey_for(MENU_LINES[0]).to_ascii_uppercase();
                 let m_key = menu_hotkey_for(MENU_LINES[1]).to_ascii_uppercase();
-                write_warn_line(format!("Unknown choice. Try {c_key}, {m_key}, or X."))?;
+                let g_key = menu_hotkey_for(MENU_LINES[2]).to_ascii_uppercase();
+                write_warn_line(format!(
+                    "Unknown choice. Try {c_key}, {m_key}, {g_key}, or X."
+                ))?;
                 write_crlf()?;
             }
         }
