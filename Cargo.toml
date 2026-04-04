@@ -1,0 +1,8 @@
+[package]
+name = "hudcon"
+version = "0.1.0"
+edition = "2021"
+description = "Simple CLI for basic processor information"
+
+[dependencies]
+sysinfo = "0.33"
