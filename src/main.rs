@@ -7,6 +7,7 @@ use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use sysinfo::{CpuRefreshKind, RefreshKind, System};
 
 use hudcon::lscpu;
+use hudcon::machine;
 
 struct RawModeGuard;
 
@@ -38,17 +39,21 @@ fn write_section_rule() -> io::Result<()> {
     out.flush()
 }
 
-/// First menu row. The dash rule above the menu uses the same display width as this string.
+/// Menu rows. The dash rule above the menu uses the width of the longest line.
 /// Format: `(X)label` where `X` is the hotkey (styled in the menu).
-const MENU_TOP_LINE: &str = "(C)PU info";
+const MENU_LINES: &[&str] = &["(C)PU info", "(M)achine info"];
 
-fn menu_top_line_width() -> usize {
-    MENU_TOP_LINE.chars().count()
+fn menu_width() -> usize {
+    MENU_LINES
+        .iter()
+        .map(|s| s.chars().count())
+        .max()
+        .unwrap_or(0)
 }
 
-fn menu_top_hotkey() -> char {
-    parse_parenthesized_hotkey(MENU_TOP_LINE)
-        .expect("MENU_TOP_LINE must look like `(X)label`")
+fn menu_hotkey_for(line: &str) -> char {
+    parse_parenthesized_hotkey(line)
+        .expect("MENU_LINES entries must look like `(X)label`")
         .0
 }
 
@@ -62,10 +67,10 @@ fn parse_parenthesized_hotkey(s: &str) -> Option<(char, &str)> {
     Some((key, rest))
 }
 
-/// Dash line matching the width of [`MENU_TOP_LINE`].
+/// Dash line matching the width of the widest [`MENU_LINES`] entry.
 fn write_banner_rule() -> io::Result<()> {
     let mut out = io::stdout();
-    let dashes = "-".repeat(menu_top_line_width());
+    let dashes = "-".repeat(menu_width());
     queue!(
         out,
         PrintStyledContent(dashes.grey()),
@@ -86,8 +91,8 @@ fn write_warn_line(s: impl AsRef<str>) -> io::Result<()> {
     out.flush()
 }
 
-fn write_menu_top_line() -> io::Result<()> {
-    let (key, rest) = parse_parenthesized_hotkey(MENU_TOP_LINE).expect("MENU_TOP_LINE must look like `(X)label`");
+fn write_menu_line(line: &str) -> io::Result<()> {
+    let (key, rest) = parse_parenthesized_hotkey(line).expect("menu line must look like `(X)label`");
     let key_str = key.to_string();
     let mut out = io::stdout();
     queue!(
@@ -392,6 +397,32 @@ fn show_cpu_info() -> io::Result<()> {
     Ok(())
 }
 
+fn show_machine_info() -> io::Result<()> {
+    let sys = machine::system_for_cpu_model();
+    #[cfg(target_os = "linux")]
+    let lscpu_raw = try_lscpu_output();
+    #[cfg(not(target_os = "linux"))]
+    let lscpu_raw: Option<String> = None;
+    let lscpu_ref = lscpu_raw.as_deref();
+
+    write_section_title("Machine Information")?;
+    write_section_rule()?;
+    write_kv("OS:", machine::friendly_os_type())?;
+    write_kv("Virtualization:", machine::virtualization_env_label())?;
+
+    write_section_title("System Details")?;
+    write_section_rule()?;
+    write_kv("Machine Name:", machine::host_name_string())?;
+    write_kv("Local IP Address:", machine::local_ip_addresses())?;
+    write_kv("Machine Model:", machine::machine_model())?;
+    write_kv("CPU Model:", machine::cpu_model_string(lscpu_ref, &sys))?;
+    write_kv("Distro Flavor:", machine::distro_flavor())?;
+    write_kv("Kernel Version:", machine::kernel_version_string())?;
+    write_kv("Motherboard:", machine::motherboard_name())?;
+    write_crlf()?;
+    Ok(())
+}
+
 fn run_menu() -> io::Result<()> {
     enable_raw_mode()?;
     let _guard = RawModeGuard;
@@ -401,7 +432,9 @@ fn run_menu() -> io::Result<()> {
 
     loop {
         write_banner_rule()?;
-        write_menu_top_line()?;
+        for line in MENU_LINES {
+            write_menu_line(line)?;
+        }
         write_menu_exit_line()?;
 
         let code = loop {
@@ -412,9 +445,13 @@ fn run_menu() -> io::Result<()> {
         };
 
         match code {
-            KeyCode::Char(c) if c.eq_ignore_ascii_case(&menu_top_hotkey()) => {
+            KeyCode::Char(c) if c.eq_ignore_ascii_case(&menu_hotkey_for(MENU_LINES[0])) => {
                 write_crlf()?;
                 show_cpu_info()?;
+            }
+            KeyCode::Char(c) if c.eq_ignore_ascii_case(&menu_hotkey_for(MENU_LINES[1])) => {
+                write_crlf()?;
+                show_machine_info()?;
             }
             KeyCode::Char(c) if c.eq_ignore_ascii_case(&'x') => {
                 write_crlf()?;
@@ -422,10 +459,9 @@ fn run_menu() -> io::Result<()> {
             }
             _ => {
                 write_crlf()?;
-                write_warn_line(format!(
-                    "Unknown choice. Try {} or X.",
-                    menu_top_hotkey().to_ascii_uppercase()
-                ))?;
+                let c_key = menu_hotkey_for(MENU_LINES[0]).to_ascii_uppercase();
+                let m_key = menu_hotkey_for(MENU_LINES[1]).to_ascii_uppercase();
+                write_warn_line(format!("Unknown choice. Try {c_key}, {m_key}, or X."))?;
                 write_crlf()?;
             }
         }
