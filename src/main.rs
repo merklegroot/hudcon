@@ -9,6 +9,8 @@ use sysinfo::{CpuRefreshKind, RefreshKind, System};
 use hudcon::gpu;
 use hudcon::lscpu;
 use hudcon::machine;
+use hudcon::disk;
+use hudcon::memory;
 
 struct RawModeGuard;
 
@@ -42,7 +44,13 @@ fn write_section_rule() -> io::Result<()> {
 
 /// Menu rows. The dash rule above the menu uses the width of the longest line.
 /// Format: `(X)label` where `X` is the hotkey (styled in the menu).
-const MENU_LINES: &[&str] = &["(C)PU info", "(M)achine info", "(G)raphics cards"];
+const MENU_LINES: &[&str] = &[
+    "(C)PU info",
+    "(M)achine info",
+    "(G)raphics cards",
+    "(R)AM",
+    "(D)isk",
+];
 
 fn menu_width() -> usize {
     MENU_LINES
@@ -504,6 +512,83 @@ fn show_gpu_info() -> io::Result<()> {
     Ok(())
 }
 
+fn show_memory_info() -> io::Result<()> {
+    let info = memory::gather_memory_info();
+
+    write_section_title("Memory Information")?;
+    write_crlf()?;
+
+    write_section_title("Memory Usage")?;
+    write_section_rule()?;
+    write_kv("RAM Usage:", format!("{}% used", info.used_percent))?;
+    write_kv("Total RAM:", &info.total_ram)?;
+    write_kv("Free RAM:", &info.free_ram)?;
+    write_kv("Used RAM:", &info.used_ram)?;
+    write_crlf()?;
+
+    write_section_title("Top RAM Consuming Processes")?;
+    write_section_rule()?;
+    if info.top_processes.is_empty() {
+        write_kv("Processes:", "No process information available")?;
+    } else {
+        for (i, p) in info.top_processes.iter().enumerate() {
+            write_section_title(&format!("{}. {}", i + 1, p.name))?;
+            write_section_rule()?;
+            write_kv("PID:", &p.pid)?;
+            write_kv("Memory:", &p.memory_absolute)?;
+            write_kv("% of RAM:", &p.memory_usage)?;
+            write_crlf()?;
+        }
+    }
+
+    Ok(())
+}
+
+fn show_disk_info() -> io::Result<()> {
+    let info = disk::gather_disk_info();
+
+    write_section_title("Disk Information")?;
+    write_crlf()?;
+
+    write_section_title("Physical Disks")?;
+    write_section_rule()?;
+    if info.physical_disks.is_empty() {
+        write_kv("Drives:", "No physical disk information available")?;
+        write_crlf()?;
+    } else {
+        for pd in &info.physical_disks {
+            write_section_title(&pd.device)?;
+            write_section_rule()?;
+            if pd.disk_type != "Unknown" {
+                write_kv("Type:", &pd.disk_type)?;
+            }
+            write_kv("Size:", &pd.size)?;
+            write_kv("Model:", &pd.model)?;
+            write_crlf()?;
+        }
+    }
+
+    write_section_title("Disk Usage (Partitions)")?;
+    write_section_rule()?;
+    if info.disks.is_empty() {
+        write_kv("Mounts:", "No disk usage information available")?;
+        write_crlf()?;
+    } else {
+        for d in &info.disks {
+            write_section_title(&d.mount)?;
+            write_section_rule()?;
+            write_kv("Filesystem:", &d.filesystem)?;
+            write_kv("Usage:", format!("{}% used", d.used_percent))?;
+            write_kv("Total:", &d.total)?;
+            write_kv("Used:", &d.used)?;
+            write_kv("Available:", &d.available)?;
+            write_crlf()?;
+        }
+    }
+
+    Ok(())
+}
+
 fn run_menu() -> io::Result<()> {
     enable_raw_mode()?;
     let _guard = RawModeGuard;
@@ -540,6 +625,16 @@ fn run_menu() -> io::Result<()> {
                 KeyCode::Char(c) if c.eq_ignore_ascii_case(&menu_hotkey_for(MENU_LINES[2])) => {
                     write_crlf()?;
                     show_gpu_info()?;
+                    continue 'menu;
+                }
+                KeyCode::Char(c) if c.eq_ignore_ascii_case(&menu_hotkey_for(MENU_LINES[3])) => {
+                    write_crlf()?;
+                    show_memory_info()?;
+                    continue 'menu;
+                }
+                KeyCode::Char(c) if c.eq_ignore_ascii_case(&menu_hotkey_for(MENU_LINES[4])) => {
+                    write_crlf()?;
+                    show_disk_info()?;
                     continue 'menu;
                 }
                 KeyCode::Char(c) if c.eq_ignore_ascii_case(&'x') => {
