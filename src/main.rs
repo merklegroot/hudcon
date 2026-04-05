@@ -81,17 +81,6 @@ fn write_banner_rule() -> io::Result<()> {
     out.flush()
 }
 
-fn write_warn_line(s: impl AsRef<str>) -> io::Result<()> {
-    let mut out = io::stdout();
-    queue!(
-        out,
-        PrintStyledContent(s.as_ref().yellow()),
-        Print("\r\n"),
-        ResetColor
-    )?;
-    out.flush()
-}
-
 fn write_menu_line(line: &str) -> io::Result<()> {
     let (key, rest) = parse_parenthesized_hotkey(line).expect("menu line must look like `(X)label`");
     let key_str = key.to_string();
@@ -522,46 +511,42 @@ fn run_menu() -> io::Result<()> {
     write_section_title("HUDcon")?;
     write_crlf()?;
 
-    loop {
+    'menu: loop {
         write_banner_rule()?;
         for line in MENU_LINES {
             write_menu_line(line)?;
         }
         write_menu_exit_line()?;
 
-        let code = loop {
-            match event::read()? {
-                Event::Key(key) if key.kind == KeyEventKind::Press => break key.code,
-                _ => {}
-            }
-        };
+        loop {
+            let code = loop {
+                match event::read()? {
+                    Event::Key(key) if key.kind == KeyEventKind::Press => break key.code,
+                    _ => {}
+                }
+            };
 
-        match code {
-            KeyCode::Char(c) if c.eq_ignore_ascii_case(&menu_hotkey_for(MENU_LINES[0])) => {
-                write_crlf()?;
-                show_cpu_info()?;
-            }
-            KeyCode::Char(c) if c.eq_ignore_ascii_case(&menu_hotkey_for(MENU_LINES[1])) => {
-                write_crlf()?;
-                show_machine_info()?;
-            }
-            KeyCode::Char(c) if c.eq_ignore_ascii_case(&menu_hotkey_for(MENU_LINES[2])) => {
-                write_crlf()?;
-                show_gpu_info()?;
-            }
-            KeyCode::Char(c) if c.eq_ignore_ascii_case(&'x') => {
-                write_crlf()?;
-                break;
-            }
-            _ => {
-                write_crlf()?;
-                let c_key = menu_hotkey_for(MENU_LINES[0]).to_ascii_uppercase();
-                let m_key = menu_hotkey_for(MENU_LINES[1]).to_ascii_uppercase();
-                let g_key = menu_hotkey_for(MENU_LINES[2]).to_ascii_uppercase();
-                write_warn_line(format!(
-                    "Unknown choice. Try {c_key}, {m_key}, {g_key}, or X."
-                ))?;
-                write_crlf()?;
+            match code {
+                KeyCode::Char(c) if c.eq_ignore_ascii_case(&menu_hotkey_for(MENU_LINES[0])) => {
+                    write_crlf()?;
+                    show_cpu_info()?;
+                    continue 'menu;
+                }
+                KeyCode::Char(c) if c.eq_ignore_ascii_case(&menu_hotkey_for(MENU_LINES[1])) => {
+                    write_crlf()?;
+                    show_machine_info()?;
+                    continue 'menu;
+                }
+                KeyCode::Char(c) if c.eq_ignore_ascii_case(&menu_hotkey_for(MENU_LINES[2])) => {
+                    write_crlf()?;
+                    show_gpu_info()?;
+                    continue 'menu;
+                }
+                KeyCode::Char(c) if c.eq_ignore_ascii_case(&'x') => {
+                    write_crlf()?;
+                    break 'menu;
+                }
+                _ => {}
             }
         }
     }

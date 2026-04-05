@@ -8,8 +8,6 @@ Web version, using SSE
 Original web version  
 <https://github.com/merklegroot/hudapp>
 
-
-
 ## Run
 
 ```bash
