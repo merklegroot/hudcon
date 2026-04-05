@@ -1,4 +1,6 @@
 //! Integration test: real host CPU architecture vs a small allowlist of common arches.
+//!
+//! Run with `cargo test --test cpu_arch -- --nocapture` to print the values this host reported.
 
 use hudcon::lscpu::parse_lscpu;
 use sysinfo::System;
@@ -31,23 +33,30 @@ fn is_common_architecture(s: &str) -> bool {
 #[test]
 fn actual_cpu_reports_common_architecture() {
     let sys_arch = System::cpu_arch();
+    println!("sysinfo::System::cpu_arch() = {sys_arch:?}");
+
     assert!(
         is_common_architecture(&sys_arch),
         "sysinfo::System::cpu_arch() should be a known ISA, got {sys_arch:?}"
     );
 
+    let const_arch = std::env::consts::ARCH;
+    println!("std::env::consts::ARCH = {const_arch:?}");
+
     assert!(
-        is_common_architecture(std::env::consts::ARCH),
+        is_common_architecture(const_arch),
         "std::env::consts::ARCH should be a known ISA, got {:?}",
-        std::env::consts::ARCH
+        const_arch
     );
 
     #[cfg(target_os = "linux")]
     {
         let Ok(output) = std::process::Command::new("lscpu").output() else {
+            println!("lscpu: (skipped — could not run `lscpu`)");
             return;
         };
         if !output.status.success() {
+            println!("lscpu: (skipped — exit status {})", output.status);
             return;
         }
         let raw = String::from_utf8_lossy(&output.stdout);
@@ -57,6 +66,7 @@ fn actual_cpu_reports_common_architecture() {
         let Some(ref arch) = info.architecture else {
             panic!("lscpu output missing Architecture field");
         };
+        println!("lscpu Architecture = {arch:?}");
         assert!(
             is_common_architecture(arch),
             "lscpu Architecture should be a known ISA, got {arch:?}"
