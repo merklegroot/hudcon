@@ -2,7 +2,9 @@
 
 use std::collections::HashSet;
 
-#[derive(Debug, Default, Clone)]
+use serde::Serialize;
+
+#[derive(Debug, Default, Clone, Serialize)]
 pub struct CpuFeatures {
     pub sse: bool,
     pub sse2: bool,
@@ -19,7 +21,7 @@ pub struct CpuFeatures {
     pub neon: bool,
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Serialize)]
 pub struct LscpuInfo {
     pub vendor: Option<String>,
     pub model: Option<String>,

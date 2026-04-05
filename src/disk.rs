@@ -2,10 +2,11 @@
 
 use std::process::Command;
 
+use serde::Serialize;
 use sysinfo::Disks;
 
 /// One mounted filesystem (hudsse `DiskInfo`).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct DiskInfo {
     pub mount: String,
     pub total: String,
@@ -16,7 +17,7 @@ pub struct DiskInfo {
 }
 
 /// One physical drive (hudsse `PhysicalDisk`).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct PhysicalDisk {
     pub device: String,
     pub size: String,
@@ -24,7 +25,7 @@ pub struct PhysicalDisk {
     pub disk_type: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct DiskGatherResult {
     pub disks: Vec<DiskInfo>,
     pub physical_disks: Vec<PhysicalDisk>,

@@ -1,5 +1,7 @@
 //! GPU / graphics info aligned with [hudsse](https://github.com/merklegroot/hudsse) `parseGpuInfo` and the GPU page.
 
+use serde::Serialize;
+
 #[cfg(target_os = "linux")]
 use std::collections::HashSet;
 #[cfg(target_os = "linux")]
@@ -381,6 +383,58 @@ impl GpuCard {
             (false, true) => "Primary display (boot VGA)",
             (false, false) => "n/a",
         }
+    }
+}
+
+/// Serializable GPU card (includes [`GpuCard::active_for_display`] as a string).
+#[derive(Debug, Clone, Serialize)]
+pub struct GpuCardDto {
+    pub index: usize,
+    pub name: String,
+    pub bus: String,
+    pub revision: String,
+    pub driver: String,
+    pub memory_total: Option<String>,
+    pub memory_used: Option<String>,
+    pub memory_free: Option<String>,
+    pub utilization: Option<u32>,
+    pub temperature: Option<u32>,
+    pub primary_display: bool,
+    pub opengl_active: bool,
+    pub active_for_display: String,
+}
+
+impl From<&GpuCard> for GpuCardDto {
+    fn from(c: &GpuCard) -> Self {
+        GpuCardDto {
+            index: c.index,
+            name: c.name.clone(),
+            bus: c.bus.clone(),
+            revision: c.revision.clone(),
+            driver: c.driver.clone(),
+            memory_total: c.memory_total.clone(),
+            memory_used: c.memory_used.clone(),
+            memory_free: c.memory_free.clone(),
+            utilization: c.utilization,
+            temperature: c.temperature,
+            primary_display: c.primary_display,
+            opengl_active: c.opengl_active,
+            active_for_display: c.active_for_display().to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GpuInfoDto {
+    pub gpus: Vec<GpuCardDto>,
+    pub opengl_renderer: Option<String>,
+}
+
+pub fn gather_gpu_info_dto() -> GpuInfoDto {
+    let g = gather_gpu_info();
+    GpuInfoDto {
+        gpus: g.gpus.iter().map(GpuCardDto::from).collect(),
+        opengl_renderer: g.opengl_renderer,
     }
 }
 

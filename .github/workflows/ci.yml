@@ -14,6 +14,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      # default-members is only the `hudcon` CLI/lib; `hudcon-tauri` is built after `npm run build` (see README).
       - name: Build
         run: cargo build --verbose
 

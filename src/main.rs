@@ -4,8 +4,8 @@ use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use crossterm::queue;
 use crossterm::style::{Print, PrintStyledContent, ResetColor, Stylize};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
-use sysinfo::{CpuRefreshKind, RefreshKind, System};
 
+use hudcon::cpu;
 use hudcon::gpu;
 use hudcon::lscpu;
 use hudcon::machine;
@@ -203,101 +203,6 @@ fn fmt_opt_str(o: &Option<String>) -> String {
     o.as_deref().unwrap_or("n/a").to_string()
 }
 
-/// Hardware max frequency in MHz (e.g. cpufreq `cpuinfo_max_freq`), if known.
-fn advertised_max_cpu_mhz() -> Option<u64> {
-    #[cfg(target_os = "linux")]
-    {
-        linux_max_cpu_freq_mhz()
-    }
-    #[cfg(target_os = "macos")]
-    {
-        macos_max_cpu_freq_mhz()
-    }
-    #[cfg(target_os = "windows")]
-    {
-        windows_max_cpu_freq_mhz()
-    }
-    #[cfg(not(any(
-        target_os = "linux",
-        target_os = "macos",
-        target_os = "windows"
-    )))]
-    {
-        None
-    }
-}
-
-#[cfg(target_os = "linux")]
-fn linux_max_cpu_freq_mhz() -> Option<u64> {
-    use std::fs;
-    use std::path::Path;
-
-    let mut max_khz = 0u64;
-    let entries = fs::read_dir("/sys/devices/system/cpu").ok()?;
-    for entry in entries.flatten() {
-        let name = entry.file_name();
-        let name = name.to_string_lossy();
-        let Some(rest) = name.strip_prefix("cpu") else {
-            continue;
-        };
-        if rest.is_empty() || !rest.chars().all(|c| c.is_ascii_digit()) {
-            continue;
-        }
-        let path = entry.path().join("cpufreq/cpuinfo_max_freq");
-        if !Path::new(&path).exists() {
-            continue;
-        }
-        let s = fs::read_to_string(&path).ok()?;
-        let khz = s.trim().parse::<u64>().ok()?;
-        max_khz = max_khz.max(khz);
-    }
-    (max_khz > 0).then_some(max_khz / 1000)
-}
-
-#[cfg(target_os = "macos")]
-fn macos_max_cpu_freq_mhz() -> Option<u64> {
-    use std::process::Command;
-
-    let out = Command::new("sysctl").args(["-n", "hw.cpufrequency_max"]).output().ok()?;
-    if !out.status.success() {
-        return None;
-    }
-    let s = String::from_utf8_lossy(&out.stdout);
-    let hz: u64 = s.trim().parse().ok()?;
-    (hz > 0).then_some(hz / 1_000_000)
-}
-
-#[cfg(target_os = "windows")]
-fn windows_max_cpu_freq_mhz() -> Option<u64> {
-    use std::process::Command;
-
-    let out = Command::new("wmic")
-        .args(["cpu", "get", "MaxClockSpeed", "/value"])
-        .output()
-        .ok()?;
-    if !out.status.success() {
-        return None;
-    }
-    let s = String::from_utf8_lossy(&out.stdout);
-    for line in s.lines() {
-        let line = line.trim();
-        if let Some(rest) = line.strip_prefix("MaxClockSpeed=") {
-            return rest.trim().parse().ok();
-        }
-    }
-    None
-}
-
-#[cfg(target_os = "linux")]
-fn try_lscpu_output() -> Option<String> {
-    use std::process::Command;
-    let out = Command::new("lscpu").output().ok()?;
-    if !out.status.success() {
-        return None;
-    }
-    String::from_utf8(out.stdout).ok()
-}
-
 fn write_cpu_features(f: &lscpu::CpuFeatures) -> io::Result<()> {
     let mut sse = Vec::new();
     if f.sse {
@@ -389,69 +294,62 @@ fn print_lscpu_block(info: &lscpu::LscpuInfo) -> io::Result<()> {
 }
 
 fn show_cpu_info() -> io::Result<()> {
-    let mut sys = System::new_with_specifics(
-        RefreshKind::nothing().with_cpu(CpuRefreshKind::everything()),
-    );
-    sys.refresh_cpu_all();
+    let snap = cpu::gather_cpu_info();
 
     write_section_title("CPU")?;
     write_section_rule()?;
 
-    #[cfg(target_os = "linux")]
-    {
-        if let Some(raw) = try_lscpu_output() {
-            if let Some(ref info) = lscpu::parse_lscpu(&raw) {
-                print_lscpu_block(info)?;
-                if let Some(cpu) = sys.cpus().first() {
-                    write_kv("Current MHz:", fmt_mhz(cpu.frequency()))?;
-                    write_kv("Max (advertised):", fmt_mhz_opt(advertised_max_cpu_mhz()))?;
-                }
-                write_cpu_features(&info.features)?;
-                write_crlf()?;
-                return Ok(());
-            }
-        }
+    if let Some(ref info) = snap.lscpu {
+        print_lscpu_block(info)?;
+        write_kv("Current MHz:", fmt_mhz(snap.current_mhz))?;
+        write_kv("Max (advertised):", fmt_mhz_opt(snap.max_advertised_mhz))?;
+        write_cpu_features(&info.features)?;
+        write_crlf()?;
+        return Ok(());
     }
 
-    if let Some(cpu) = sys.cpus().first() {
-        write_kv("Vendor:", cpu.vendor_id())?;
-        write_kv("CPU Model:", cpu.brand().trim())?;
-        write_kv("Current MHz:", fmt_mhz(cpu.frequency()))?;
-        write_kv("Max (advertised):", fmt_mhz_opt(advertised_max_cpu_mhz()))?;
+    if let Some(ref v) = snap.vendor {
+        write_kv("Vendor:", v)?;
+    }
+    if let Some(ref m) = snap.cpu_model {
+        if !m.is_empty() {
+            write_kv("CPU Model:", m)?;
+        } else {
+            write_kv("CPU Model:", "(unavailable)")?;
+        }
     } else {
         write_kv("CPU Model:", "(unavailable)")?;
     }
+    if snap.vendor.is_some() || snap.cpu_model.as_ref().map_or(false, |s| !s.is_empty()) {
+        write_kv("Current MHz:", fmt_mhz(snap.current_mhz))?;
+        write_kv("Max (advertised):", fmt_mhz_opt(snap.max_advertised_mhz))?;
+    }
 
-    if let Some(n) = sys.physical_core_count() {
+    if let Some(n) = snap.physical_cores {
         write_kv("Physical cores:", n)?;
     }
-    write_kv("Logical cores:", sys.cpus().len())?;
+    write_kv("Logical cores:", snap.logical_cores)?;
     write_crlf()?;
     Ok(())
 }
 
 fn show_machine_info() -> io::Result<()> {
-    let sys = machine::system_for_cpu_model();
-    #[cfg(target_os = "linux")]
-    let lscpu_raw = try_lscpu_output();
-    #[cfg(not(target_os = "linux"))]
-    let lscpu_raw: Option<String> = None;
-    let lscpu_ref = lscpu_raw.as_deref();
+    let m = machine::gather_machine_info();
 
     write_section_title("Machine Information")?;
     write_section_rule()?;
-    write_kv("OS:", machine::friendly_os_type())?;
-    write_kv("Virtualization:", machine::virtualization_env_label())?;
+    write_kv("OS:", &m.os)?;
+    write_kv("Virtualization:", &m.virtualization)?;
 
     write_section_title("System Details")?;
     write_section_rule()?;
-    write_kv("Machine Name:", machine::host_name_string())?;
-    write_kv("Local IP Address:", machine::local_ip_addresses())?;
-    write_kv("Machine Model:", machine::machine_model())?;
-    write_kv("CPU Model:", machine::cpu_model_string(lscpu_ref, &sys))?;
-    write_kv("Distro Flavor:", machine::distro_flavor())?;
-    write_kv("Kernel Version:", machine::kernel_version_string())?;
-    write_kv("Motherboard:", machine::motherboard_name())?;
+    write_kv("Machine Name:", &m.host_name)?;
+    write_kv("Local IP Address:", &m.local_ip)?;
+    write_kv("Machine Model:", &m.machine_model)?;
+    write_kv("CPU Model:", &m.cpu_model)?;
+    write_kv("Distro Flavor:", &m.distro_flavor)?;
+    write_kv("Kernel Version:", &m.kernel_version)?;
+    write_kv("Motherboard:", &m.motherboard)?;
     write_crlf()?;
     Ok(())
 }

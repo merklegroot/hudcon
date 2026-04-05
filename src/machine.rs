@@ -5,8 +5,10 @@ use std::fs;
 use std::net::IpAddr;
 use std::path::Path;
 
+use serde::Serialize;
 use sysinfo::{CpuRefreshKind, Networks, RefreshKind, System};
 
+use crate::cpu;
 use crate::lscpu;
 
 /// Friendly OS name (matches hudsse `platformUtil.getFriendlyPlatformName`).
@@ -273,4 +275,34 @@ pub fn system_for_cpu_model() -> System {
     );
     sys.refresh_cpu_all();
     sys
+}
+
+/// Flat machine snapshot for IPC (same fields as the CLI machine view).
+#[derive(Debug, Clone, Serialize)]
+pub struct MachineInfo {
+    pub os: String,
+    pub virtualization: String,
+    pub host_name: String,
+    pub local_ip: String,
+    pub machine_model: String,
+    pub cpu_model: String,
+    pub distro_flavor: String,
+    pub kernel_version: String,
+    pub motherboard: String,
+}
+
+pub fn gather_machine_info() -> MachineInfo {
+    let sys = system_for_cpu_model();
+    let lscpu_raw = cpu::try_lscpu_output();
+    MachineInfo {
+        os: friendly_os_type().to_string(),
+        virtualization: virtualization_env_label().to_string(),
+        host_name: host_name_string(),
+        local_ip: local_ip_addresses(),
+        machine_model: machine_model(),
+        cpu_model: cpu_model_string(lscpu_raw.as_deref(), &sys),
+        distro_flavor: distro_flavor(),
+        kernel_version: kernel_version_string(),
+        motherboard: motherboard_name(),
+    }
 }

@@ -4,11 +4,23 @@
     {
       "type": "lldb",
       "request": "launch",
-      "name": "Debug hudcon",
-      "program": "${workspaceFolder}/target/debug/hudcon",
+      "name": "Debug HUDcon",
+      "program": "${workspaceFolder}/target/debug/${input:hudconVariant}",
       "args": [],
       "cwd": "${workspaceFolder}",
-      "preLaunchTask": "cargo: build (debug)"
+      "preLaunchTask": "hudcon: pre-debug build"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "hudconVariant",
+      "type": "pickString",
+      "description": "Which app to debug?",
+      "options": [
+        "hudcon",
+        "hudcon-tauri"
+      ],
+      "default": "hudcon"
     }
   ]
 }

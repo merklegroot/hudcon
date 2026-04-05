@@ -2,10 +2,11 @@
 
 use std::ffi::OsStr;
 
+use serde::Serialize;
 use sysinfo::{MemoryRefreshKind, ProcessRefreshKind, ProcessesToUpdate, RefreshKind, System};
 
 /// One process in the “top RAM” list (like hudsse `TopProcess`).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct TopProcess {
     pub pid: String,
     pub name: String,
@@ -14,7 +15,7 @@ pub struct TopProcess {
     pub memory_absolute: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct MemoryInfo {
     pub total_ram: String,
     pub free_ram: String,

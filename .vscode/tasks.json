@@ -15,6 +15,34 @@
         "reveal": "silent",
         "panel": "shared"
       }
+    },
+    {
+      "label": "tauri: vite build + cargo build hudcon-tauri (debug)",
+      "type": "shell",
+      "command": "npm run build && cargo build -p hudcon-tauri",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {}
+      },
+      "group": "build",
+      "problemMatcher": ["$rustc"],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "hudcon: pre-debug build",
+      "type": "shell",
+      "command": "npm run build && cargo build --workspace",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": ["$rustc"],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
     }
   ]
 }

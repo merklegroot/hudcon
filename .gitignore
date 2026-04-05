@@ -1,6 +1,11 @@
 # Rust / Cargo
 /target/
 **/*.rs.bk
+/src-tauri/gen/
+
+# Node / Vite (run `npm install && npm run build` before `cargo build -p hudcon-tauri`)
+/node_modules/
+/dist/
 
 # IDE / OS
 .idea/
