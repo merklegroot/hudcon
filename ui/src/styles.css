@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap");
+
 :root {
   --bg: #0f1419;
   --surface: #1a2332;
@@ -6,11 +8,8 @@
   --accent: #3db8a0;
   --accent-dim: #2a8f7c;
   --border: #2a3544;
-  font-family:
-    "IBM Plex Sans",
-    "Segoe UI",
-    system-ui,
-    sans-serif;
+  --value: #b8e0c8;
+  font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
 }
 
 * {
@@ -97,6 +96,8 @@ body {
   border-radius: 8px;
   padding: 1rem 1.1rem;
   min-height: 280px;
+  max-height: min(70vh, 640px);
+  overflow: auto;
 }
 
 .status {
@@ -109,13 +110,51 @@ body {
   font-size: 0.875rem;
 }
 
-.json {
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
+.view-root {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.section-title {
+  margin: 0.85rem 0 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: 0.02em;
+}
+
+.view-root > .section-title:first-child {
+  margin-top: 0;
+}
+
+.section-rule {
+  height: 1px;
+  background: linear-gradient(90deg, var(--border), transparent);
+  margin: 0.15rem 0 0.5rem;
+}
+
+.kv-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 220px) 1fr;
+  gap: 0.65rem 1rem;
+  align-items: baseline;
+  padding: 0.2rem 0;
+}
+
+.kv-label {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.kv-value {
+  color: var(--value);
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
   font-size: 0.8rem;
-  font-family:
-    "IBM Plex Mono",
-    ui-monospace,
-    monospace;
+  word-break: break-word;
+}
+
+.error {
+  color: #f0a0a0;
+  margin: 0;
 }

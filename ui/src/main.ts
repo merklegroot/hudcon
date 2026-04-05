@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { renderTab } from "./views";
 import "./styles.css";
 
 type TabId = "cpu" | "machine" | "gpu" | "memory" | "disk";
@@ -28,12 +29,6 @@ function el<K extends keyof HTMLElementTagNameMap>(
     }
   }
   return node as HTMLElementTagNameMap[K];
-}
-
-function renderData(data: unknown): HTMLElement {
-  const pre = el("pre", { class: "json" });
-  pre.textContent = JSON.stringify(data, null, 2);
-  return pre;
 }
 
 async function loadTab(tab: TabId): Promise<unknown> {
@@ -76,7 +71,7 @@ function mount() {
     try {
       const data = await loadTab(active);
       status.textContent = "";
-      content.append(renderData(data));
+      content.append(renderTab(active, data));
     } catch (e) {
       status.textContent = `Error: ${e instanceof Error ? e.message : String(e)}`;
     }
