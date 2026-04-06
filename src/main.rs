@@ -11,6 +11,7 @@ use hudcon::lscpu;
 use hudcon::machine;
 use hudcon::disk;
 use hudcon::memory;
+use hudcon::package;
 
 struct RawModeGuard;
 
@@ -50,6 +51,7 @@ const MENU_LINES: &[&str] = &[
     "(G)raphics cards",
     "(R)AM",
     "(D)isk",
+    "(P)ackage management",
 ];
 
 fn menu_width() -> usize {
@@ -442,6 +444,36 @@ fn show_memory_info() -> io::Result<()> {
     Ok(())
 }
 
+fn show_package_info() -> io::Result<()> {
+    let info = package::gather_package_info();
+
+    write_section_title("Package Management")?;
+    write_crlf()?;
+
+    write_section_title("Package Information")?;
+    write_section_rule()?;
+    write_kv("Package Manager:", &info.package_manager)?;
+    let formats = if info.package_formats.len() == 1 {
+        info.package_formats[0].clone()
+    } else {
+        info.package_formats.join(", ")
+    };
+    write_kv("Package Formats:", formats)?;
+    write_crlf()?;
+
+    write_section_title("Package Repositories")?;
+    write_section_rule()?;
+    if info.repositories.is_empty() {
+        write_kv("Repositories:", "No repositories found")?;
+    } else {
+        for repo in &info.repositories {
+            write_kv_str(&format!("{}:", repo.package_manager), &repo.repository)?;
+        }
+    }
+
+    Ok(())
+}
+
 fn show_disk_info() -> io::Result<()> {
     let info = disk::gather_disk_info();
 
@@ -533,6 +565,11 @@ fn run_menu() -> io::Result<()> {
                 KeyCode::Char(c) if c.eq_ignore_ascii_case(&menu_hotkey_for(MENU_LINES[4])) => {
                     write_crlf()?;
                     show_disk_info()?;
+                    continue 'menu;
+                }
+                KeyCode::Char(c) if c.eq_ignore_ascii_case(&menu_hotkey_for(MENU_LINES[5])) => {
+                    write_crlf()?;
+                    show_package_info()?;
                     continue 'menu;
                 }
                 KeyCode::Char(c) if c.eq_ignore_ascii_case(&'x') => {

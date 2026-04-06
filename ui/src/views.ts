@@ -113,6 +113,17 @@ export interface DiskGatherResult {
   physical_disks: PhysicalDisk[];
 }
 
+export interface PackageRepository {
+  package_manager: string;
+  repository: string;
+}
+
+export interface PackageInfo {
+  package_manager: string;
+  package_formats: string[];
+  repositories: PackageRepository[];
+}
+
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
   props?: Partial<HTMLElementTagNameMap[K]> & { class?: string },
@@ -350,6 +361,38 @@ export function renderMemory(data: MemoryInfo): HTMLElement {
   return wrap(...blocks);
 }
 
+export function renderPackages(data: PackageInfo): HTMLElement {
+  const formats =
+    data.package_formats.length === 1
+      ? data.package_formats[0]
+      : data.package_formats.join(", ");
+
+  const blocks: HTMLElement[] = [
+    section("Package information"),
+    rule(),
+    kv("Package Manager", data.package_manager || "Unknown"),
+    kv("Package Formats", formats || "Unknown"),
+    section("Package repositories"),
+    rule(),
+  ];
+
+  if (!data.repositories.length) {
+    blocks.push(kv("Repositories", "No repositories found"));
+    return wrap(...blocks);
+  }
+
+  for (const repo of data.repositories) {
+    const card = el("div", { class: "repo-card" });
+    card.append(
+      el("div", { class: "repo-manager" }, [repo.package_manager]),
+      el("p", { class: "repo-uri" }, [repo.repository])
+    );
+    blocks.push(card);
+  }
+
+  return wrap(...blocks);
+}
+
 export function renderDisk(data: DiskGatherResult): HTMLElement {
   const blocks: HTMLElement[] = [section("Physical disks"), rule()];
 
@@ -385,7 +428,7 @@ export function renderDisk(data: DiskGatherResult): HTMLElement {
 }
 
 export function renderTab(
-  tab: "cpu" | "machine" | "gpu" | "memory" | "disk",
+  tab: "cpu" | "machine" | "gpu" | "memory" | "disk" | "packages",
   raw: unknown
 ): HTMLElement {
   const err = (msg: string) => el("p", { class: "error" }, [msg]);
@@ -402,6 +445,8 @@ export function renderTab(
         return renderMemory(raw as MemoryInfo);
       case "disk":
         return renderDisk(raw as DiskGatherResult);
+      case "packages":
+        return renderPackages(raw as PackageInfo);
     }
   } catch {
     return err("Could not render this view.");

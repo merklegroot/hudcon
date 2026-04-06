@@ -3,6 +3,7 @@ use hudcon::disk;
 use hudcon::gpu;
 use hudcon::machine;
 use hudcon::memory;
+use hudcon::package;
 
 #[tauri::command]
 fn get_cpu_info() -> cpu::CpuSnapshot {
@@ -29,6 +30,11 @@ fn get_disk_info() -> disk::DiskGatherResult {
     disk::gather_disk_info()
 }
 
+#[tauri::command]
+fn get_package_info() -> package::PackageInfo {
+    package::gather_package_info()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -38,6 +44,7 @@ pub fn run() {
             get_gpu_info,
             get_memory_info,
             get_disk_info,
+            get_package_info,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
