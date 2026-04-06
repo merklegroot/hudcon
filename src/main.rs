@@ -12,6 +12,7 @@ use hudcon::machine;
 use hudcon::disk;
 use hudcon::memory;
 use hudcon::package;
+use hudcon::path;
 
 struct RawModeGuard;
 
@@ -52,6 +53,7 @@ const MENU_LINES: &[&str] = &[
     "(R)AM",
     "(D)isk",
     "(P)ackage management",
+    "(H) Path",
 ];
 
 fn menu_width() -> usize {
@@ -474,6 +476,34 @@ fn show_package_info() -> io::Result<()> {
     Ok(())
 }
 
+fn show_path_info() -> io::Result<()> {
+    let info = path::gather_path_info();
+
+    write_section_title("Path Information")?;
+    write_crlf()?;
+
+    write_section_title("PATH variable")?;
+    write_section_rule()?;
+    if info.path.is_empty() {
+        write_kv("PATH:", "(empty or unset)")?;
+    } else {
+        write_kv_str("PATH:", &info.path)?;
+    }
+    write_crlf()?;
+
+    write_section_title(&format!("Path folders ({})", info.folders.len()))?;
+    write_section_rule()?;
+    if info.folders.is_empty() {
+        write_kv("Folders:", "No path folders found")?;
+    } else {
+        for (i, folder) in info.folders.iter().enumerate() {
+            write_kv_str(&format!("{:>3}.", i + 1), folder)?;
+        }
+    }
+
+    Ok(())
+}
+
 fn show_disk_info() -> io::Result<()> {
     let info = disk::gather_disk_info();
 
@@ -570,6 +600,11 @@ fn run_menu() -> io::Result<()> {
                 KeyCode::Char(c) if c.eq_ignore_ascii_case(&menu_hotkey_for(MENU_LINES[5])) => {
                     write_crlf()?;
                     show_package_info()?;
+                    continue 'menu;
+                }
+                KeyCode::Char(c) if c.eq_ignore_ascii_case(&menu_hotkey_for(MENU_LINES[6])) => {
+                    write_crlf()?;
+                    show_path_info()?;
                     continue 'menu;
                 }
                 KeyCode::Char(c) if c.eq_ignore_ascii_case(&'x') => {

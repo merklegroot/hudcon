@@ -7,3 +7,4 @@ pub mod gpu;
 pub mod memory;
 pub mod disk;
 pub mod package;
+pub mod path;

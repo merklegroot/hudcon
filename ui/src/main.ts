@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { renderTab } from "./views";
 import "./styles.css";
 
-type TabId = "cpu" | "machine" | "gpu" | "memory" | "disk" | "packages";
+type TabId = "cpu" | "machine" | "gpu" | "memory" | "disk" | "packages" | "path";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "cpu", label: "CPU" },
@@ -11,6 +11,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "memory", label: "RAM" },
   { id: "disk", label: "Disk" },
   { id: "packages", label: "Packages" },
+  { id: "path", label: "Path" },
 ];
 
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -46,6 +47,8 @@ async function loadTab(tab: TabId): Promise<unknown> {
       return invoke("get_disk_info");
     case "packages":
       return invoke("get_package_info");
+    case "path":
+      return invoke("get_path_info");
   }
 }
 

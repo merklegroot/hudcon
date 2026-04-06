@@ -142,6 +142,80 @@ body {
   word-break: break-word;
 }
 
+.path-intro {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.path-raw {
+  margin: 0 0 0.5rem;
+  padding: 0.65rem 0.75rem;
+  background: #141c26;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.75rem;
+  color: var(--value);
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 8rem;
+  overflow: auto;
+}
+
+.path-empty {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.path-folder-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.path-folder-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.55rem 0.65rem;
+  background: #141c26;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.path-folder-row:hover {
+  border-color: var(--accent-dim);
+}
+
+.path-folder-idx {
+  flex-shrink: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 999px;
+  background: #1e3d34;
+  color: var(--accent);
+  font-size: 0.7rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+.path-folder-code {
+  flex: 1;
+  min-width: 0;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.8125rem;
+  color: var(--text);
+  word-break: break-all;
+  line-height: 1.35;
+}
+
 .section-title {
   margin: 0.85rem 0 0;
   font-size: 0.95rem;

@@ -124,6 +124,11 @@ export interface PackageInfo {
   repositories: PackageRepository[];
 }
 
+export interface PathInfo {
+  path: string;
+  folders: string[];
+}
+
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
   props?: Partial<HTMLElementTagNameMap[K]> & { class?: string },
@@ -393,6 +398,49 @@ export function renderPackages(data: PackageInfo): HTMLElement {
   return wrap(...blocks);
 }
 
+export function renderPath(data: PathInfo): HTMLElement {
+  const intro = el("p", { class: "path-intro" }, [
+    "PATH entries for this process (split, deduplicated, sorted like hudsse).",
+  ]);
+
+  const blocks: HTMLElement[] = [
+    intro,
+    section("PATH variable"),
+    rule(),
+  ];
+
+  if (!data.path) {
+    blocks.push(kv("PATH", "(empty or unset)"));
+  } else {
+    blocks.push(
+      el("pre", { class: "path-raw" }, [data.path])
+    );
+  }
+
+  blocks.push(
+    section(`Path folders (${data.folders.length})`),
+    rule()
+  );
+
+  if (!data.folders.length) {
+    blocks.push(el("p", { class: "path-empty" }, ["No path folders found"]));
+    return wrap(...blocks);
+  }
+
+  const list = el("div", { class: "path-folder-list" });
+  data.folders.forEach((folder, i) => {
+    const row = el("div", { class: "path-folder-row" });
+    row.append(
+      el("span", { class: "path-folder-idx" }, [String(i + 1)]),
+      el("code", { class: "path-folder-code" }, [folder])
+    );
+    list.append(row);
+  });
+  blocks.push(list);
+
+  return wrap(...blocks);
+}
+
 export function renderDisk(data: DiskGatherResult): HTMLElement {
   const blocks: HTMLElement[] = [section("Physical disks"), rule()];
 
@@ -428,7 +476,7 @@ export function renderDisk(data: DiskGatherResult): HTMLElement {
 }
 
 export function renderTab(
-  tab: "cpu" | "machine" | "gpu" | "memory" | "disk" | "packages",
+  tab: "cpu" | "machine" | "gpu" | "memory" | "disk" | "packages" | "path",
   raw: unknown
 ): HTMLElement {
   const err = (msg: string) => el("p", { class: "error" }, [msg]);
@@ -447,6 +495,8 @@ export function renderTab(
         return renderDisk(raw as DiskGatherResult);
       case "packages":
         return renderPackages(raw as PackageInfo);
+      case "path":
+        return renderPath(raw as PathInfo);
     }
   } catch {
     return err("Could not render this view.");
