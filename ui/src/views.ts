@@ -129,6 +129,34 @@ export interface PathInfo {
   folders: string[];
 }
 
+export interface DotNetBasicInfo {
+  installed: boolean;
+  executable_path: string | null;
+  sdk_version: string | null;
+  last_error: string | null;
+  /** Present when SDK was found under ~/.dotnet but `dotnet` is not on PATH. */
+  path_note: string | null;
+}
+
+export interface DotNetInstallResult {
+  success: boolean;
+  message: string;
+  path_hint: string | null;
+  /** Shell profile / user PATH was updated (or this app process PATH was aligned). */
+  path_configured: boolean;
+}
+
+export interface DotNetPathConfigureResult {
+  success: boolean;
+  message: string;
+  path_configured: boolean;
+}
+
+export interface NodeJsBasicInfo {
+  node_version: string | null;
+  npm_version: string | null;
+}
+
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
   props?: Partial<HTMLElementTagNameMap[K]> & { class?: string },
@@ -441,6 +469,184 @@ export function renderPath(data: PathInfo): HTMLElement {
   return wrap(...blocks);
 }
 
+export function renderDotNet(data: DotNetBasicInfo): HTMLElement {
+  const blocks: HTMLElement[] = [];
+
+  const locTitle = el("div", { class: "dotnet-loc-head" });
+  locTitle.append(
+    el("h2", { class: "section-title dotnet-subtitle" }, ["Location"]),
+    el(
+      "span",
+      {
+        class: data.executable_path ? "dotnet-pill dotnet-pill-ok" : "dotnet-pill",
+      },
+      [data.executable_path ? "Found" : "Not detected"]
+    )
+  );
+  blocks.push(locTitle, rule());
+
+  blocks.push(
+    kv(
+      ".NET executable",
+      data.executable_path ?? "n/a"
+    ),
+    section("SDK version"),
+    rule(),
+    kv("dotnet --version", data.sdk_version ?? "n/a")
+  );
+
+  if (data.last_error && !data.sdk_version) {
+    blocks.push(kv("Note", data.last_error));
+  }
+
+  if (data.path_note) {
+    blocks.push(
+      el("div", { class: "dotnet-path-note-block" }, [
+        el("p", { class: "dotnet-path-note" }, [data.path_note]),
+        el("div", {
+          id: "dotnet-path-fix-slot",
+          class: "dotnet-path-fix-slot",
+        }),
+      ])
+    );
+  }
+
+  if (!data.sdk_version) {
+    blocks.push(
+      section("Install SDK"),
+      rule(),
+      el("p", { class: "dotnet-hint-text" }, [
+        "No SDK on PATH for this process. Install from ",
+        el(
+          "a",
+          {
+            href: "https://dotnet.microsoft.com/download",
+            target: "_blank",
+            rel: "noopener noreferrer",
+          },
+          ["dotnet.microsoft.com"]
+        ),
+        ", or run an automated install (.NET 8, 9, or 10 — official Microsoft script to ~/.dotnet on macOS/Linux; winget or PowerShell on Windows). This can take several minutes.",
+      ]),
+      el("div", { id: "dotnet-install-slot", class: "dotnet-install-slot" })
+    );
+  }
+
+  return wrap(...blocks);
+}
+
+export function renderNodeJs(data: NodeJsBasicInfo): HTMLElement {
+  return wrap(
+    section("Node.js"),
+    rule(),
+    kv("node --version", data.node_version ?? "n/a"),
+    kv("npm --version", data.npm_version ?? "n/a")
+  );
+}
+
+export function mountDotNetInstallUi(
+  host: HTMLElement | null,
+  opts: {
+    install: (major: number) => Promise<DotNetInstallResult>;
+    onOutcome: (r: DotNetInstallResult) => void;
+  }
+): void {
+  if (!host) return;
+  host.replaceChildren();
+
+  const row = el("div", { class: "dotnet-install-buttons" });
+  const log = el("pre", { class: "dotnet-install-log" });
+  log.hidden = true;
+
+  const mkBtn = (label: string, major: number) => {
+    const b = el(
+      "button",
+      { type: "button", class: "btn dotnet-install-btn" },
+      [label]
+    );
+    b.onclick = async () => {
+      for (const x of row.querySelectorAll("button")) {
+        (x as HTMLButtonElement).disabled = true;
+      }
+      log.hidden = false;
+      log.textContent = "Installing… (this may take several minutes)";
+      try {
+        const r = await opts.install(major);
+        const head = r.success ? "[OK] " : "[FAILED] ";
+        const pathLine =
+          r.success && r.path_configured
+            ? "\n\nPATH: updated (shell profile and/or this app process)."
+            : "";
+        log.textContent =
+          head +
+          (r.message || "(no output)") +
+          pathLine +
+          (r.path_hint ? `\n\n${r.path_hint}` : "");
+        opts.onOutcome(r);
+      } catch (e) {
+        log.textContent = `Error: ${e instanceof Error ? e.message : String(e)}`;
+      } finally {
+        for (const x of row.querySelectorAll("button")) {
+          (x as HTMLButtonElement).disabled = false;
+        }
+      }
+    };
+    return b;
+  };
+
+  row.append(
+    mkBtn("Install .NET 8 SDK", 8),
+    mkBtn("Install .NET 9 SDK", 9),
+    mkBtn("Install .NET 10 SDK", 10)
+  );
+  host.append(row, log);
+}
+
+export function mountDotNetPathFixUi(
+  host: HTMLElement | null,
+  opts: {
+    configure: () => Promise<DotNetPathConfigureResult>;
+    onOutcome: (r: DotNetPathConfigureResult) => void;
+  }
+): void {
+  if (!host) return;
+  host.replaceChildren();
+
+  const row = el("div", { class: "dotnet-path-fix-row" });
+  const btn = el(
+    "button",
+    { type: "button", class: "btn dotnet-path-fix-btn" },
+    ["Add dotnet to PATH"]
+  );
+  const log = el("pre", {
+    class: "dotnet-install-log dotnet-path-fix-log",
+    hidden: true,
+  });
+
+  btn.onclick = async () => {
+    btn.disabled = true;
+    log.hidden = false;
+    log.textContent = "Updating PATH…";
+    try {
+      const r = await opts.configure();
+      const head = r.success ? "[OK] " : "[FAILED] ";
+      const extra =
+        r.success && r.path_configured
+          ? "\n\nShell profile and/or user PATH were updated where possible; this app’s process PATH is updated."
+          : "";
+      log.textContent = head + (r.message || "(no message)") + extra;
+      opts.onOutcome(r);
+    } catch (e) {
+      log.textContent = `Error: ${e instanceof Error ? e.message : String(e)}`;
+    } finally {
+      btn.disabled = false;
+    }
+  };
+
+  row.append(btn);
+  host.append(row, log);
+}
+
 export function renderDisk(data: DiskGatherResult): HTMLElement {
   const blocks: HTMLElement[] = [section("Physical disks"), rule()];
 
@@ -476,7 +682,16 @@ export function renderDisk(data: DiskGatherResult): HTMLElement {
 }
 
 export function renderTab(
-  tab: "cpu" | "machine" | "gpu" | "memory" | "disk" | "packages" | "path",
+  tab:
+    | "cpu"
+    | "machine"
+    | "gpu"
+    | "memory"
+    | "disk"
+    | "packages"
+    | "path"
+    | "dotnet"
+    | "node",
   raw: unknown
 ): HTMLElement {
   const err = (msg: string) => el("p", { class: "error" }, [msg]);
@@ -497,6 +712,10 @@ export function renderTab(
         return renderPackages(raw as PackageInfo);
       case "path":
         return renderPath(raw as PathInfo);
+      case "dotnet":
+        return renderDotNet(raw as DotNetBasicInfo);
+      case "node":
+        return renderNodeJs(raw as NodeJsBasicInfo);
     }
   } catch {
     return err("Could not render this view.");

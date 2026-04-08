@@ -13,6 +13,7 @@ use hudcon::disk;
 use hudcon::memory;
 use hudcon::package;
 use hudcon::path;
+use hudcon::dotnet;
 
 struct RawModeGuard;
 
@@ -54,6 +55,7 @@ const MENU_LINES: &[&str] = &[
     "(D)isk",
     "(P)ackage management",
     "(H) Path",
+    "(N) .NET",
 ];
 
 fn menu_width() -> usize {
@@ -126,6 +128,59 @@ fn write_crlf() -> io::Result<()> {
     let mut out = io::stdout();
     write!(out, "\r\n")?;
     out.flush()
+}
+
+fn write_paragraph_capped(text: &str, max_lines: usize) -> io::Result<()> {
+    let mut out = io::stdout();
+    let lines: Vec<&str> = text.lines().collect();
+    let n = lines.len().min(max_lines);
+    for line in lines.iter().take(n) {
+        queue!(out, Print(line), Print("\r\n"))?;
+    }
+    if lines.len() > max_lines {
+        queue!(
+            out,
+            PrintStyledContent("...(output truncated)".grey()),
+            Print("\r\n"),
+            ResetColor
+        )?;
+    }
+    out.flush()
+}
+
+fn read_key_press() -> io::Result<KeyCode> {
+    loop {
+        match event::read()? {
+            Event::Key(key) if key.kind == KeyEventKind::Press => return Ok(key.code),
+            _ => {}
+        }
+    }
+}
+
+fn console_dotnet_install_flow(major: u32) -> io::Result<()> {
+    write_crlf()?;
+    write_section_title(&format!("Installing .NET {major}…"))?;
+    write_section_rule()?;
+    queue!(
+        io::stdout(),
+        PrintStyledContent("Running Microsoft install script (may take several minutes)…".grey()),
+        Print("\r\n"),
+        ResetColor
+    )?;
+    io::stdout().flush()?;
+    let r = dotnet::install_dotnet_sdk(major);
+    write_crlf()?;
+    write_kv(
+        "Result:",
+        if r.success { "Success" } else { "Failed" },
+    )?;
+    if let Some(ref h) = r.path_hint {
+        write_kv_str("PATH hint:", h)?;
+    }
+    write_crlf()?;
+    write_paragraph_capped(&r.message, 120)?;
+    write_crlf()?;
+    Ok(())
 }
 
 fn short_gpu_name(s: &str) -> String {
@@ -504,6 +559,78 @@ fn show_path_info() -> io::Result<()> {
     Ok(())
 }
 
+fn show_dotnet_info() -> io::Result<()> {
+    let info = dotnet::gather_dotnet_basic_info();
+
+    write_section_title(".NET")?;
+    write_crlf()?;
+
+    write_section_title("Location")?;
+    write_section_rule()?;
+    if let Some(ref p) = info.executable_path {
+        write_kv("Status:", "Found")?;
+        write_kv(".NET executable:", p)?;
+    } else {
+        write_kv("Status:", "Not detected")?;
+        write_kv(".NET executable:", "n/a")?;
+    }
+    write_crlf()?;
+
+    write_section_title("SDK version")?;
+    write_section_rule()?;
+    if let Some(ref v) = info.sdk_version {
+        write_kv("dotnet --version:", v)?;
+    } else {
+        write_kv("dotnet --version:", "n/a")?;
+        if let Some(ref e) = info.last_error {
+            write_kv("Note:", e)?;
+        }
+    }
+
+    if let Some(ref n) = info.path_note {
+        write_crlf()?;
+        write_section_title("PATH")?;
+        write_section_rule()?;
+        write_kv_str("Hint:", n)?;
+    }
+
+    if info.sdk_version.is_none() {
+        write_crlf()?;
+        write_section_title("Install")?;
+        write_section_rule()?;
+        write_kv(
+            "Download:",
+            "https://dotnet.microsoft.com/download",
+        )?;
+        write_crlf()?;
+        queue!(
+            io::stdout(),
+            PrintStyledContent("(I)".yellow().bold()),
+            PrintStyledContent(" Install .NET 8 SDK".white()),
+            Print("\r\n"),
+            PrintStyledContent("(9)".yellow().bold()),
+            PrintStyledContent(" Install .NET 9 SDK".white()),
+            Print("\r\n"),
+            PrintStyledContent("(0)".yellow().bold()),
+            PrintStyledContent(" Install .NET 10 SDK".white()),
+            Print("\r\n"),
+            PrintStyledContent("Any other key: return to menu".grey()),
+            Print("\r\n"),
+            ResetColor
+        )?;
+        io::stdout().flush()?;
+
+        match read_key_press()? {
+            KeyCode::Char(c) if c.eq_ignore_ascii_case(&'i') => console_dotnet_install_flow(8)?,
+            KeyCode::Char('9') => console_dotnet_install_flow(9)?,
+            KeyCode::Char('0') => console_dotnet_install_flow(10)?,
+            _ => {}
+        }
+    }
+
+    Ok(())
+}
+
 fn show_disk_info() -> io::Result<()> {
     let info = disk::gather_disk_info();
 
@@ -605,6 +732,11 @@ fn run_menu() -> io::Result<()> {
                 KeyCode::Char(c) if c.eq_ignore_ascii_case(&menu_hotkey_for(MENU_LINES[6])) => {
                     write_crlf()?;
                     show_path_info()?;
+                    continue 'menu;
+                }
+                KeyCode::Char(c) if c.eq_ignore_ascii_case(&menu_hotkey_for(MENU_LINES[7])) => {
+                    write_crlf()?;
+                    show_dotnet_info()?;
                     continue 'menu;
                 }
                 KeyCode::Char(c) if c.eq_ignore_ascii_case(&'x') => {

@@ -1,8 +1,23 @@
 import { invoke } from "@tauri-apps/api/core";
-import { renderTab } from "./views";
+import {
+  mountDotNetInstallUi,
+  mountDotNetPathFixUi,
+  renderTab,
+  type DotNetInstallResult,
+  type DotNetPathConfigureResult,
+} from "./views";
 import "./styles.css";
 
-type TabId = "cpu" | "machine" | "gpu" | "memory" | "disk" | "packages" | "path";
+type TabId =
+  | "cpu"
+  | "machine"
+  | "gpu"
+  | "memory"
+  | "disk"
+  | "packages"
+  | "path"
+  | "dotnet"
+  | "node";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "cpu", label: "CPU" },
@@ -12,6 +27,8 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "disk", label: "Disk" },
   { id: "packages", label: "Packages" },
   { id: "path", label: "Path" },
+  { id: "dotnet", label: ".NET" },
+  { id: "node", label: "Node.js" },
 ];
 
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -49,6 +66,10 @@ async function loadTab(tab: TabId): Promise<unknown> {
       return invoke("get_package_info");
     case "path":
       return invoke("get_path_info");
+    case "dotnet":
+      return invoke("get_dotnet_basic_info");
+    case "node":
+      return invoke("get_nodejs_basic_info");
   }
 }
 
@@ -77,7 +98,35 @@ function mount() {
     try {
       const data = await loadTab(active);
       status.textContent = "";
-      content.append(renderTab(active, data));
+      const panel = renderTab(active, data);
+      content.append(panel);
+      if (active === "dotnet") {
+        mountDotNetPathFixUi(content.querySelector("#dotnet-path-fix-slot"), {
+          configure: () => invoke<DotNetPathConfigureResult>("add_dotnet_to_path"),
+          onOutcome: (r) => {
+            if (!r.success) {
+              status.textContent = "PATH update failed — see log below.";
+              return;
+            }
+            status.textContent = r.path_configured
+              ? "PATH update finished — click Refresh to reload .NET details."
+              : "dotnet is already on your PATH.";
+          },
+        });
+        mountDotNetInstallUi(content.querySelector("#dotnet-install-slot"), {
+          install: (major) =>
+            invoke<DotNetInstallResult>("install_dotnet_sdk", {
+              majorVersion: major,
+            }),
+          onOutcome: (r) => {
+            status.textContent = r.success
+              ? r.path_configured
+                ? "Install finished — PATH updated; click Refresh to reload .NET details."
+                : "Install finished — click Refresh to verify dotnet on PATH."
+              : "Install reported failure — see log below.";
+          },
+        });
+      }
     } catch (e) {
       status.textContent = `Error: ${e instanceof Error ? e.message : String(e)}`;
     }
